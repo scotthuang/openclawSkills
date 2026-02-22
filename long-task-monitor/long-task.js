@@ -4,10 +4,12 @@
  * 
  * 启动长任务监控流程
  * 
+ * Security: Uses execFile with argument arrays to prevent command injection
+ * 
  * Usage:
  *   node long-task.js start <task_description> <worker_task>
  *   node long-task.js status [task_id]
- *   node long-task.js stop [task_id]
+ *   node long-task.js stop [task_id>
  *   node long-task.js complete <task_id> <result>
  * 
  * Examples:
@@ -17,7 +19,7 @@
  *   node long-task.js complete <task_id> "任务完成"
  */
 
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -28,10 +30,17 @@ const TASK_MANAGER = path.join(SKILL_DIR, 'task-manager.js');
 const MONITOR_PROMPT = path.join(SKILL_DIR, 'monitor-prompt.txt');
 const TASKS_DIR = path.join(HOME, '.openclaw', 'workspace', 'long-tasks');
 
-// Helper to run command
-function run(cmd, options = {}) {
+// Helper: validate input - only allow safe characters
+function sanitizeInput(input, maxLen = 200) {
+  if (!input) return '';
+  // Only allow alphanumeric, Chinese, basic punctuation, spaces, hyphens
+  return input.replace(/[^\w\u4e00-\u9fa5\s\-_.,，！？、]/g, '').slice(0, maxLen);
+}
+
+// Helper to run command safely with argument arrays
+function run(cmd, args = [], options = {}) {
   return new Promise((resolve, reject) => {
-    exec(cmd, { encoding: 'utf-8', ...options }, (error, stdout, stderr) => {
+    execFile(cmd, args, { encoding: 'utf-8', ...options }, (error, stdout, stderr) => {
       if (error) {
         reject(new Error(stderr || error.message));
       } else {
@@ -45,10 +54,10 @@ function run(cmd, options = {}) {
 function getMonitorPrompt(taskId, workerSessionKey, taskDescription, workerTask, round, taskFolder) {
   let prompt = fs.readFileSync(MONITOR_PROMPT, 'utf-8');
   
-  prompt = prompt.replace(/{task_id}/g, taskId)
-    .replace(/{worker_session_key}/g, workerSessionKey)
-    .replace(/{task_description}/g, taskDescription)
-    .replace(/{worker_task}/g, workerTask)
+  prompt = prompt.replace(/{task_id}/g, sanitizeInput(taskId))
+    .replace(/{worker_session_key}/g, sanitizeInput(workerSessionKey, 500))
+    .replace(/{task_description}/g, sanitizeInput(taskDescription, 500))
+    .replace(/{worker_task}/g, sanitizeInput(workerTask, 1000))
     .replace(/{round}/g, round.toString())
     .replace(/{task_folder}/g, taskFolder);
   
@@ -57,29 +66,36 @@ function getMonitorPrompt(taskId, workerSessionKey, taskDescription, workerTask,
 
 // Get task info
 function getTask(taskId) {
-  const taskPath = path.join(TASKS_DIR, taskId, 'task.json');
+  const safeTaskId = sanitizeInput(taskId);
+  const taskPath = path.join(TASKS_DIR, safeTaskId, 'task.json');
   if (!fs.existsSync(taskPath)) {
     return null;
   }
   return JSON.parse(fs.readFileSync(taskPath, 'utf-8'));
 }
 
-// Update task session keys
+// Update task session keys safely
 async function updateSessionKeys(taskId, workerSessionKey, monitorSessionKey) {
+  const safeTaskId = sanitizeInput(taskId);
   if (workerSessionKey) {
-    await run(`node "${TASK_MANAGER}" update ${taskId} workerSessionKey "${workerSessionKey}"`);
+    const safeKey = sanitizeInput(workerSessionKey, 500);
+    await run('node', [TASK_MANAGER, 'update', safeTaskId, 'workerSessionKey', safeKey]);
   }
   if (monitorSessionKey) {
-    await run(`node "${TASK_MANAGER}" update ${taskId} monitorSessionKey "${monitorSessionKey}"`);
+    const safeKey = sanitizeInput(monitorSessionKey, 500);
+    await run('node', [TASK_MANAGER, 'update', safeTaskId, 'monitorSessionKey', safeKey]);
   }
 }
 
 // Generate Worker spawn command
 function generateWorkerSpawnCommand(taskId, workerTask) {
-  const workerLabel = `worker-${taskId}`;
+  const safeTaskId = sanitizeInput(taskId);
+  const safeWorkerTask = sanitizeInput(workerTask, 1000);
+  const workerLabel = `worker-${safeTaskId}`;
+  
   const workerPrompt = `你是 Worker Agent，负责执行以下任务：
 
-${workerTask}
+${safeWorkerTask}
 
 ## 重要规则
 1. 正常执行任务，不需要汇报进度
@@ -95,10 +111,14 @@ ${workerTask}
 
 // Generate Monitor spawn command
 function generateMonitorSpawnCommand(taskId, workerSessionKey, taskDescription, workerTask, round) {
-  const taskFolder = path.join(TASKS_DIR, taskId);
-  const monitorLabel = `monitor-${taskId}`;
+  const safeTaskId = sanitizeInput(taskId);
+  const safeWorkerKey = sanitizeInput(workerSessionKey, 500);
+  const safeDesc = sanitizeInput(taskDescription, 500);
+  const safeTask = sanitizeInput(workerTask, 1000);
+  const taskFolder = path.join(TASKS_DIR, safeTaskId);
+  const monitorLabel = `monitor-${safeTaskId}`;
   
-  const prompt = getMonitorPrompt(taskId, workerSessionKey, taskDescription, workerTask, round, taskFolder);
+  const prompt = getMonitorPrompt(safeTaskId, safeWorkerKey, safeDesc, safeTask, round, taskFolder);
   const escapedPrompt = prompt.replace(/"/g, '\\"').replace(/\n/g, '\\n');
   
   return {
@@ -109,9 +129,12 @@ function generateMonitorSpawnCommand(taskId, workerSessionKey, taskDescription, 
 
 // Complete task and cleanup sessions
 async function completeTask(taskId, result) {
-  console.log(`✅ Completing task: ${taskId}`);
+  const safeTaskId = sanitizeInput(taskId);
+  const safeResult = sanitizeInput(result, 500);
   
-  const task = getTask(taskId);
+  console.log(`✅ Completing task: ${safeTaskId}`);
+  
+  const task = getTask(safeTaskId);
   if (!task) {
     console.log('❌ Task not found');
     return;
@@ -124,35 +147,35 @@ async function completeTask(taskId, result) {
   const durationMinutes = Math.round(durationMs / 60000);
   
   const status = {
-    taskId,
+    taskId: safeTaskId,
     status: 'completed',
     startedAt,
     endedAt,
     durationMinutes,
     totalMonitorRounds: task.monitorRound,
     workerRestartCount: task.workerRestartCount,
-    result
+    result: safeResult
   };
   
-  const statusPath = path.join(TASKS_DIR, taskId, 'status.json');
+  const statusPath = path.join(TASKS_DIR, safeTaskId, 'status.json');
   fs.writeFileSync(statusPath, JSON.stringify(status, null, 2));
   
   // Update task status
-  const taskPath = path.join(TASKS_DIR, taskId, 'task.json');
+  const taskPath = path.join(TASKS_DIR, safeTaskId, 'task.json');
   const updatedTask = { ...task, status: 'completed', endedAt };
   fs.writeFileSync(taskPath, JSON.stringify(updatedTask, null, 2));
   
   console.log(`✅ Task completed in ${durationMinutes} minutes`);
-  console.log(`   Result: ${result}`);
+  console.log(`   Result: ${safeResult}`);
   
   // Cleanup sessions if they exist
   if (task.workerSessionKey) {
+    const safeWorkerKey = sanitizeInput(task.workerSessionKey, 500);
     console.log(`\n🧹 Cleanup sessions:`);
-    console.log(`   Worker: ${task.workerSessionKey}`);
+    console.log(`   Worker: ${safeWorkerKey}`);
     
-    // Kill Worker process
     try {
-      await run(`openclaw sessions kill ${task.workerSessionKey} 2>/dev/null || true`);
+      await run('openclaw', ['sessions', 'kill', safeWorkerKey]);
       console.log(`   ✅ Worker session killed`);
     } catch (e) {
       console.log(`   ⚠️ Failed to kill Worker: ${e.message}`);
@@ -160,10 +183,11 @@ async function completeTask(taskId, result) {
   }
   
   if (task.monitorSessionKey) {
-    console.log(`   Monitor: ${task.monitorSessionKey}`);
+    const safeMonitorKey = sanitizeInput(task.monitorSessionKey, 500);
+    console.log(`   Monitor: ${safeMonitorKey}`);
     
     try {
-      await run(`openclaw sessions kill ${task.monitorSessionKey} 2>/dev/null || true`);
+      await run('openclaw', ['sessions', 'kill', safeMonitorKey]);
       console.log(`   ✅ Monitor session killed`);
     } catch (e) {
       console.log(`   ⚠️ Failed to kill Monitor: ${e.message}`);
@@ -174,7 +198,7 @@ async function completeTask(taskId, result) {
 // Show task status
 async function showStatus() {
   console.log('📋 Current Tasks:\n');
-  await run(`node "${TASK_MANAGER}" list`);
+  await run('node', [TASK_MANAGER, 'list']);
 }
 
 // Show usage
@@ -227,15 +251,16 @@ switch (cmd) {
       showUsage();
       process.exit(1);
     }
-    const workerTask = arg2 || arg1;
-    console.log(`🚀 Starting Long Task: ${arg1}`);
-    console.log(`   Worker Task: ${workerTask}\n`);
+    const safeDesc = sanitizeInput(arg1, 200);
+    const safeWorkerTask = sanitizeInput(arg2 || arg1, 1000);
+    console.log(`🚀 Starting Long Task: ${safeDesc}`);
+    console.log(`   Worker Task: ${safeWorkerTask}\n`);
     
     // Create task
-    await run(`node "${TASK_MANAGER}" create "${arg1}" "${workerTask}"`);
+    await run('node', [TASK_MANAGER, 'create', safeDesc, safeWorkerTask]);
     
     // Get latest task
-    const tasks = await run(`node "${TASK_MANAGER}" list`);
+    const tasks = await run('node', [TASK_MANAGER, 'list']);
     const match = tasks.match(/\[(task-[^\]]+)\]/);
     if (!match) {
       console.log('❌ Failed to create task');
@@ -246,7 +271,7 @@ switch (cmd) {
     
     console.log(`\n📁 Task Folder: ${taskFolder}`);
     console.log(`\n⚙️  Step 1: Generate Worker spawn command:`);
-    const workerCmd = generateWorkerSpawnCommand(taskId, workerTask);
+    const workerCmd = generateWorkerSpawnCommand(taskId, safeWorkerTask);
     console.log(workerCmd.command);
     console.log(`\n📝 ⚠️ 获取 Worker Session Key 后，运行以下命令保存:`);
     console.log(`   node "${TASK_MANAGER}" update ${taskId} workerSessionKey "<Worker Session Key>"`);
@@ -298,15 +323,13 @@ switch (cmd) {
       console.error('Usage: node long-task.js folder <task_id>');
       process.exit(1);
     }
-    console.log(path.join(TASKS_DIR, arg1));
+    console.log(path.join(TASKS_DIR, sanitizeInput(arg1)));
     break;
     
   case 'update':
-    // Update session keys: node long-task.js update <task_id> worker <sessionKey>
-    // or: node long-task.js update <task_id> monitor <sessionKey>
-    const updateTaskId = arg1;
+    const updateTaskId = sanitizeInput(arg1);
     const updateType = arg2;
-    const updateSessionKey = arg3;
+    const updateSessionKey = sanitizeInput(arg3, 500);
     if (!updateTaskId || !updateType || !updateSessionKey) {
       console.error('Usage: node long-task.js update <task_id> worker|monitor <sessionKey>');
       process.exit(1);
@@ -316,7 +339,7 @@ switch (cmd) {
       console.error('Usage: node long-task.js update <task_id> worker|monitor <sessionKey>');
       process.exit(1);
     }
-    run(`node "${TASK_MANAGER}" update ${updateTaskId} ${updateField} "${updateSessionKey}"`).then(() => {
+    run('node', [TASK_MANAGER, 'update', updateTaskId, updateField, updateSessionKey]).then(() => {
       console.log(`✅ Updated ${updateField} for task ${updateTaskId}`);
     }).catch(console.error);
     break;

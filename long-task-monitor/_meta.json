@@ -1,8 +1,13 @@
 {
   "name": "long-task-monitor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "长任务监控方案 V2 - Worker-Monitor 架构，Monitor 通过 hook-logger 监控，每轮 10 分钟 Announce 汇报",
   "author": "Scott",
   "created": "2026-02-22",
-  "updated": "2026-02-22"
+  "updated": "2026-02-22",
+  "runtime": "node",
+  "permissions": ["sessions-spawn", "sessions-send", "sessions-kill"],
+  "requiredBinaries": ["openclaw"],
+  "requiredEnvironment": [],
+  "capabilities": ["long-task-monitor"]
 }

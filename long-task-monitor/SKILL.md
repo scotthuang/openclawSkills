@@ -173,3 +173,10 @@ spawn Worker/Monitor 后，必须手动更新 task.json：
 cd ~/.openclaw/workspace/skills/long-task-monitor
 # 未来如有 npm 包需求
 ```
+
+## ⚠️ 安全说明
+
+本 skill 已做安全加固：
+- 使用 `execFile` + 参数数组防止命令注入
+- 所有用户输入经过过滤（只允许安全字符）
+- 依赖 `hook-logger` 插件，请确保来源可信

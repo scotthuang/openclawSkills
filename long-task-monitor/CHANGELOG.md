@@ -2,6 +2,16 @@
 
 ## English
 
+### v1.0.1 (2026-02-22)
+
+#### 🔒 Security Fix
+- Use `execFile` with argument arrays to prevent command injection
+- Add input sanitization for all user-provided values (task IDs, session keys, descriptions)
+- Add security comment at top of script
+- Add metadata fields: runtime, permissions, capabilities, requiredBinaries
+
+---
+
 ### v1.0.0 (2026-02-22)
 
 #### 🎉 Initial Release
@@ -12,6 +22,16 @@
 ---
 
 ## 中文
+
+### v1.0.1 (2026-02-22)
+
+#### 🔒 安全修复
+- 使用 `execFile` + 参数数组防止命令注入
+- 对所有用户输入进行过滤（任务ID、session key、描述等）
+- 脚本顶部添加安全注释
+- 添加 metadata 字段：runtime, permissions, capabilities, requiredBinaries
+
+---
 
 ### v1.0.0 (2026-02-22)
 
