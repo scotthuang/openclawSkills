@@ -2,6 +2,14 @@
 
 ## English
 
+### v1.0.2 (2026-02-22)
+
+#### 🔧 Fix
+- Fix SKILL.md: default delay 30s → 10s (matches code)
+- Add `requiredBinaries` field to metadata
+
+---
+
 ### v1.0.1 (2026-02-22)
 
 #### 🔒 Security Fix
@@ -21,6 +29,14 @@
 ---
 
 ## 中文
+
+### v1.0.2 (2026-02-22)
+
+#### 🔧 修复
+- 修复 SKILL.md：默认延迟 30 秒改为 10 秒（与代码一致）
+- 添加 `requiredBinaries` 字段到 metadata
+
+---
 
 ### v1.0.1 (2026-02-22)
 

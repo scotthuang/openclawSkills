@@ -1,6 +1,6 @@
 {
   "name": "graceful-restart",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "优雅重启 Gateway - 重启后自唤醒",
   "author": "Scott",
   "created": "2026-02-22",
