@@ -31,10 +31,11 @@ const MONITOR_PROMPT = path.join(SKILL_DIR, 'monitor-prompt.txt');
 const TASKS_DIR = path.join(HOME, '.openclaw', 'workspace', 'long-tasks');
 
 // Helper: validate input - only allow safe characters
+// Note: Allow ':' for session keys like 'agent:main:subagent:xxx'
 function sanitizeInput(input, maxLen = 200) {
   if (!input) return '';
-  // Only allow alphanumeric, Chinese, basic punctuation, spaces, hyphens
-  return input.replace(/[^\w\u4e00-\u9fa5\s\-_.,，！？、]/g, '').slice(0, maxLen);
+  // Allow alphanumeric, Chinese, basic punctuation, spaces, hyphens, colons (for session keys)
+  return input.replace(/[^\w\u4e00-\u9fa5\s\-_.,，！？、:]/g, '').slice(0, maxLen);
 }
 
 // Helper to run command safely with argument arrays

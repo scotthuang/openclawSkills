@@ -2,6 +2,13 @@
 
 ## English
 
+### v1.0.2 (2026-02-22)
+
+#### 🔧 Fix
+- Fix sanitizeInput to allow `:` character (needed for session keys like `agent:main:subagent:xxx`)
+
+---
+
 ### v1.0.1 (2026-02-22)
 
 #### 🔒 Security Fix
@@ -22,6 +29,13 @@
 ---
 
 ## 中文
+
+### v1.0.2 (2026-02-22)
+
+#### 🔧 修复
+- 修复 sanitizeInput 函数，允许 `:` 字符（session keys 需要）
+
+---
 
 ### v1.0.1 (2026-02-22)
 

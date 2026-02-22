@@ -178,5 +178,10 @@ cd ~/.openclaw/workspace/skills/long-task-monitor
 
 本 skill 已做安全加固：
 - 使用 `execFile` + 参数数组防止命令注入
-- 所有用户输入经过过滤（只允许安全字符）
+- 所有用户输入经过过滤（只允许安全字符，包含 `:` 用于 session keys）
 - 依赖 `hook-logger` 插件，请确保来源可信
+
+## ⚠️ 已知限制
+
+- Monitor Agent 需要使用 exec 工具执行 shell 命令（写入监控日志），这是架构固有限制
+- Session Key 必须包含 `:` 字符（如 `agent:main:subagent:xxx`），已修复过滤函数允许此字符
