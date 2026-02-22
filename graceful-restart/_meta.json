@@ -5,6 +5,9 @@
   "author": "Scott",
   "created": "2026-02-22",
   "updated": "2026-02-22",
-  "dependencies": ["openclaw CLI"],
-  "requiredBinaries": ["openclaw"]
+  "runtime": "node",
+  "permissions": ["gateway-restart", "cron"],
+  "requiredBinaries": ["openclaw"],
+  "requiredEnvironment": [],
+  "capabilities": ["gateway-restart"]
 }
