@@ -2,6 +2,15 @@
 
 ## English
 
+### v1.0.1 (2026-02-22)
+
+#### 🔒 Security Fix
+- Use `execFile` with argument arrays to prevent command injection
+- Add input validation for `--task` parameter
+- Declare `openclaw CLI` dependency in metadata
+
+---
+
 ### v1.0.0 (2026-02-22)
 
 #### 🎉 Initial Release
@@ -12,6 +21,15 @@
 ---
 
 ## 中文
+
+### v1.0.1 (2026-02-22)
+
+#### 🔒 安全修复
+- 使用 `execFile` + 参数数组防止命令注入
+- 添加 `--task` 参数输入验证
+- 在 metadata 中声明 `openclaw CLI` 依赖
+
+---
 
 ### v1.0.0 (2026-02-22)
 
