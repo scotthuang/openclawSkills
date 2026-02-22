@@ -9,9 +9,11 @@
  *   node graceful-restart.js
  *   node graceful-restart.js --task "继续安装 Python 包"
  *   node graceful-restart.js --task "继续安装 Python包" --delay 60
+ * 
+ * Security: Uses execFile with argument arrays to prevent command injection
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 
 const HOME = os.homedir();
@@ -36,9 +38,12 @@ if (!taskDescription) {
   taskDescription = "继续之前的任务";
 }
 
+// Validate task description - only allow safe characters
+const safeTaskDesc = taskDescription.replace(/[^\w\u4e00-\u9fa5\s\d\-_,，。！？、]/g, '').slice(0, 200);
+
 console.log('🔄 Gateway Restart with Self-Wakeup');
 console.log('================================');
-console.log(`📝 Task: ${taskDescription}`);
+console.log(`📝 Task: ${safeTaskDesc}`);
 console.log(`⏱️  Delay: ${delaySeconds} seconds`);
 console.log('');
 
@@ -47,26 +52,26 @@ console.log('⏰ Setting up cron job...');
 const futureTime = new Date(Date.now() + delaySeconds * 1000);
 const cronTime = futureTime.toISOString().replace('.000Z', 'Z');
 
-// Step 2: Create cron job with system-event
-const cronCmd = `openclaw cron add \
-  --at "${cronTime}" \
-  --session main \
-  --system-event "🔔 Gateway 已重启！有待处理任务：${taskDescription}" \
-  --name "auto-wakeup" \
-  --delete-after-run`;
-
+// Step 2: Create cron job with system-event (using execFile to prevent injection)
+console.log('🔄 Restarting Gateway...');
 try {
-  execSync(cronCmd, { encoding: 'utf-8' });
+  execFileSync('openclaw', [
+    'cron', 'add',
+    '--at', cronTime,
+    '--session', 'main',
+    '--system-event', `🔔 Gateway 已重启！有待处理任务：${safeTaskDesc}`,
+    '--name', 'auto-wakeup',
+    '--delete-after-run'
+  ], { encoding: 'utf-8' });
   console.log('   ✅ Cron job created');
 } catch (error) {
   console.error('   ❌ Failed to create cron job:', error.message);
   process.exit(1);
 }
 
-// Step 3: Restart Gateway
-console.log('🔄 Restarting Gateway...');
+// Step 3: Restart Gateway (using execFile)
 try {
-  execSync('openclaw gateway restart', { encoding: 'utf-8', timeout: 30000 });
+  execFileSync('openclaw', ['gateway', 'restart'], { encoding: 'utf-8', timeout: 30000 });
   console.log('   ✅ Gateway restart initiated');
 } catch (error) {
   console.error('   ❌ Failed to restart Gateway:', error.message);

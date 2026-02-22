@@ -4,5 +4,6 @@
   "description": "优雅重启 Gateway - 重启后自唤醒",
   "author": "Scott",
   "created": "2026-02-22",
-  "updated": "2026-02-22"
+  "updated": "2026-02-22",
+  "dependencies": ["openclaw CLI"]
 }
