@@ -9,6 +9,13 @@
 
 ---
 
+### v1.0.4 (2026-02-22)
+
+#### 🔧 Fix
+- Add more metadata fields: runtime, permissions, capabilities, requiredEnvironment
+
+---
+
 ### v1.0.3 (2026-02-22)
 
 #### 🔧 Fix
