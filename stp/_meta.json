@@ -6,11 +6,12 @@
   "created": "2026-02-06",
   "updated": "2026-03-01",
   "permissions": {
-    "description": "读取本地会话文件用于 heartbeat 监控",
+    "description": "读取本地会话文件用于 heartbeat 监控，创建 cron jobs",
     "files": [
       "~/.openclaw/agents/main/sessions/sessions.json",
       "~/.openclaw/agents/main/sessions/*.jsonl"
     ],
+    "cron": "创建 heartbeat 检查任务",
     "rationale": "用于检测子代理状态，判断任务是否完成或卡死"
   }
 }
