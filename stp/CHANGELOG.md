@@ -1,47 +1,79 @@
-# Changelog - STP (Structured Task Planning)
+# STP Skill Changelog
 
-## v1.1.1 (2026-02-13)
+## 2026-02-28
 
-### ✨ 新增功能
-- **计划书标准格式**：新增技术方案、预期产出字段，规范化任务文档结构
-- **执行日志格式建议**：明确 `[命令]`、`[输出]`、`[退出码]` 格式，便于追溯
-- **Agent 执行规范**：添加步骤完成后补记执行日志的方法（`--exec-file`）
+### 核心架构升级：异步子代理模式
 
-### 🔧 优化
-- 完善自然语言模式的任务分析流程指导
-- 丰富示例计划书（股票查询示例）
-- 优化确认流程展示格式
+**最重要改动：将主会话改为非阻塞模式**
 
----
+#### 背景
+V1 版本在主会话运行，长任务会阻塞整个会话，无法响应用户其他请求。
 
-## v1.1.0 (2026-02-08)
+#### V2 架构
+```
+主会话 (非阻塞)
+    │
+    ├── session_spawn (步骤执行) → 执行子代理 (isolated)
+    │                              │
+    │                              └──→ announce 完成/失败
+    │
+    ├── session_spawn (步骤检验) → 检验子代理 (LLM)
+    │                              │
+    │                              └──→ 返回通过/不通过
+    │
+    └── cron job (定时检查) → 监控子代理状态
+```
 
-### ✨ 新功能
-- **路径变量标准化**：添加 `<STP_ROOT>`、`<STP_SCRIPTS>`、`<STP_TASK_LIST>`、`<STP_TASKS>` 变量定义，提升文档可移植性
-- **步骤细分支持**：支持步骤编号格式为 `1.1`、`1.2` 等嵌套子步骤
-- **新增路径变量说明**：在 SKILL.md 顶部添加路径变量说明和使用
-
-### 🔧 优化
-- **硬编码路径清理**：移除所有硬编码路径（如 `~/.openclaw/workspace/skills/stp/scripts/` → `<STP_SCRIPTS>/`）
-- **脚本精简**：删除冗余的 `update_step.py`，保留统一的 `execute_task.py`
-- **文档结构优化**：统一使用路径变量，提高文档可维护性
-
-### 🐛 修复
-- 修复了路径不一致导致的问题
-- 优化了执行日志记录方式
-
-### 📝 文档更新
-- SKILL.md 添加路径变量说明
-- 更新示例代码使用路径变量
-- 完善使用说明
+#### 优势
+1. **主会话非阻塞**：发起子任务后立即返回，可响应用户其他请求
+2. **子任务独立运行**：每个步骤在独立子代理中运行，互不干扰
+3. **通过 announce 通信**：子任务完成后主动通知主会话
+4. **定时监控**：cron job 自动检查子任务状态，无需手动追踪
 
 ---
 
-## v1.0.0 (2026-02-06)
+### 功能增强
 
-### 🎉 初始版本
-- 支持两种模式：文件模式和自然语言模式
-- 任务文档解析和步骤生成
-- 状态跟踪和执行日志
-- 快速失败策略
-- 子任务执行支持
+1. **Cron Job 自动管理**
+   - `start` 命令自动创建 cron job（`stp-heartbeat-{task_id}`），每 10 分钟检查子任务状态
+   - `interrupt` 命令自动删除对应的 cron job
+   - Heartbeat 检测到任务完成后自动清理 cron job
+
+2. **Heartbeat 状态检测增强**
+   - 新增 `is_running` 判断：基于 `is_waiting`（等待工具返回）或最近 5 分钟有活动
+   - 新增 `tool_call_count` 和 `tool_result_count`：更准确判断子代理是否在工作中
+   - 新增 `cleanup_reason`：自动清理时返回原因
+
+3. **sessions_history_sync 增强**
+   - 返回字段：`is_waiting`, `is_running`, `is_recent`, `tool_call_count`, `tool_result_count`, `last_msg_type`
+   - 更准确判断子代理状态
+
+### 架构变化
+
+1. **移除 .current_task 文件**
+   - 不再依赖 `.current_task` 文件存储当前任务
+   - 改用 cron job 携带 task_id
+
+2. **Heartbeat 触发方式变更**
+   - 不再依赖内置 heartbeat + HEARTBEAT.md
+   - 改用独立 cron job 定时触发
+
+### 自动清理逻辑
+
+Heartbeat 检测到以下情况会自动删除 cron job：
+- 没有活跃子代理
+- 所有子代理不在工作中（completed/idle）
+- 所有子代理会话不存在（可能已手动清理）
+
+### 使用方式
+
+```bash
+# 启动任务（自动创建 cron job）
+python3 stp_orchestrator.py start <plan_file>
+
+# 中断任务（自动删除 cron job）
+python3 stp_orchestrator.py interrupt <task_id>
+
+# 手动检查状态
+python3 stp_orchestrator.py heartbeat <task_id>
+```
