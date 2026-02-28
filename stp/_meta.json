@@ -1,8 +1,16 @@
 {
   "name": "stp",
-  "version": "1.1.0",
-  "description": "结构化任务规划与分步执行（Structured Task Planning）",
+  "version": "1.2.0",
+  "description": "结构化任务规划与分步执行 V2（异步子代理架构）",
   "author": "Scott",
   "created": "2026-02-06",
-  "updated": "2026-02-08"
+  "updated": "2026-03-01",
+  "permissions": {
+    "description": "读取本地会话文件用于 heartbeat 监控",
+    "files": [
+      "~/.openclaw/agents/main/sessions/sessions.json",
+      "~/.openclaw/agents/main/sessions/*.jsonl"
+    ],
+    "rationale": "用于检测子代理状态，判断任务是否完成或卡死"
+  }
 }
