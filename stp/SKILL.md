@@ -55,6 +55,7 @@ description_en: "Structured Task Planning V2 with async subagent execution. Each
 
 ## 全局设置
 - 步骤超时时间: [无超时 / N 分钟]
+- 任务完成后删除目录: [是 / 否]（默认否，保留任务记录）
 
 ## 核心执行步骤
 - [ ] 步骤 1：具体描述
@@ -80,6 +81,7 @@ description_en: "Structured Task Planning V2 with async subagent execution. Each
 
 全局设置：
 - 步骤超时时间：无超时
+- 任务完成后删除目录：否（默认保留）
 
 核心执行步骤：
 - [ ] 步骤 1：编写股票查询脚本
@@ -97,6 +99,7 @@ description_en: "Structured Task Planning V2 with async subagent execution. Each
   输入 "取消" → 放弃此任务
   输入 "修改" → 调整计划
   输入 "超时 30" → 设置每个步骤超时 30 分钟
+  输入 "删除" 或 "清理" → 任务完成后删除目录
 ========================================
 ```
 

@@ -252,6 +252,7 @@ class TaskOrchestrator:
         # 解析任务信息
         task_name = ""
         timeout = "无超时"
+        cleanup_dir = "否"
         steps = {}
         
         lines = content.split('\n')
@@ -267,6 +268,11 @@ class TaskOrchestrator:
                 timeout_match = re.search(r':\s*(.+)$', stripped)
                 if timeout_match:
                     timeout = timeout_match.group(1).strip()
+            
+            if '任务完成后删除目录' in stripped or '完成后删除' in stripped:
+                cleanup_match = re.search(r':\s*(.+)$', stripped)
+                if cleanup_match:
+                    cleanup_dir = cleanup_match.group(1).strip()
             
             if '## 核心执行步骤' in stripped:
                 in_steps = True
@@ -316,6 +322,7 @@ class TaskOrchestrator:
             'name': task_name,
             'created': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'timeout': timeout,
+            'cleanup_dir': cleanup_dir if 'cleanup_dir' in dir() and cleanup_dir else '否',
         }
         self.write_steps_md(steps, task_info)
         
@@ -697,6 +704,19 @@ def cmd_heartbeat(args: List[str]):
             result["cleanup_reason"] = "所有子代理已完成，任务结束"
         except Exception as e:
             result["cron_error"] = str(e)
+        
+        # 检查是否需要删除任务目录
+        try:
+            steps_content = orchestrator.steps_file.read_text(encoding='utf-8')
+            cleanup_match = re.search(r'- 任务完成后删除目录：(.+)$', steps_content, re.MULTILINE)
+            if cleanup_match and '是' in cleanup_match.group(1):
+                # 删除任务目录
+                import shutil
+                shutil.rmtree(orchestrator.task_dir)
+                result["task_dir_deleted"] = str(orchestrator.task_dir)
+                result["cleanup_reason"] = "任务完成且设置删除目录"
+        except Exception as e:
+            result["cleanup_error"] = str(e)
     
     result["need_cleanup"] = need_cleanup
     
