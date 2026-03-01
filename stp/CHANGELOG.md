@@ -1,5 +1,19 @@
 # STP Skill Changelog
 
+## 2026-03-02
+
+### 修复
+
+1. **Cron Job 添加 channel 参数**
+   - 问题：STP 创建 cron 时使用 `--announce` 但未指定 `--channel`
+   - 解决：添加 `--channel webchat` 参数，避免 cron 执行报错
+
+2. **task_step 输出清理信息**
+   - 任务完成或中断时，`task_steps.md` 中增加清理信息区块
+   - 记录：中断/完成时间、终止的子代理、删除的 cron、终止的进程
+
+---
+
 ## 2026-02-28
 
 ### 核心架构升级：异步子代理模式

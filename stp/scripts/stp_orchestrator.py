@@ -189,13 +189,29 @@ class TaskOrchestrator:
         
         return steps
     
-    def write_steps_md(self, steps: Dict[int, Dict[str, Any]], task_info: Dict[str, Any]):
+    def write_steps_md(self, steps: Dict[int, Dict[str, Any]], task_info: Dict[str, Any], cleanup_info: Dict[str, Any] = None):
         """写入 task_steps.md"""
+        # 构建清理信息
+        cleanup_section = ""
+        if cleanup_info:
+            killed_subagents = cleanup_info.get('killed_subagents', [])
+            cron_removed = cleanup_info.get('cron_removed', [])
+            killed_pids = cleanup_info.get('killed_pids', [])
+            
+            if killed_subagents or cron_removed or killed_pids:
+                cleanup_section = f"""
+## 任务清理信息
+- **中断/完成时间**: {cleanup_info.get('timestamp', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}
+- **终止子代理**: {', '.join(killed_subagents) if killed_subagents else '无'}
+- **删除 Cron**: {', '.join(cron_removed) if cron_removed else '无'}
+- **终止进程**: {', '.join(map(str, killed_pids)) if killed_pids else '无'}
+"""
+        
         content = f"""## 任务基础信息
 - 任务名称：{task_info.get('name', '未知')}
 - 任务ID：task-{self.task_id}
 - 创建时间：{task_info.get('created', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}
-- 步骤超时时间：{task_info.get('timeout', '无超时')}
+- 步骤超时时间：{task_info.get('timeout', '无超时')}{f"\n- **Cron Job**: {task_info.get('cron', '无')}" if task_info.get('cron') else ""}
 
 ## 核心执行步骤
 
@@ -231,6 +247,11 @@ class TaskOrchestrator:
 - [✗] 失败
 - [!] 已中断
 """
+        
+        # 添加清理信息
+        if cleanup_section:
+            content += cleanup_section
+            
         self.steps_file.write_text(content, encoding='utf-8')
     
     # ========== 任务操作 ==========
@@ -323,6 +344,7 @@ class TaskOrchestrator:
             'created': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'timeout': timeout,
             'cleanup_dir': cleanup_dir if 'cleanup_dir' in dir() and cleanup_dir else '否',
+            'cron': f'stp-heartbeat-{self.task_id}',
         }
         self.write_steps_md(steps, task_info)
         
@@ -441,6 +463,7 @@ class TaskOrchestrator:
         """中断所有活跃子代理"""
         steps = self.read_steps_md()
         killed = []
+        killed_pids = []
         
         for step_num, step in steps.items():
             status = step['status']
@@ -454,7 +477,7 @@ class TaskOrchestrator:
                 if step.get('verify_subagent'):
                     killed.append(step['verify_subagent'])
         
-        task_info = {'name': '未知', 'timeout': '无超时'}
+        task_info = {'name': '未知', 'timeout': '无超时', 'cron': f'stp-heartbeat-{self.task_id}'}
         if self.steps_file.exists():
             content = self.steps_file.read_text(encoding='utf-8')
             name_match = re.search(r'- 任务名称：(.+)$', content, re.MULTILINE)
@@ -463,8 +486,19 @@ class TaskOrchestrator:
             timeout_match = re.search(r'- 步骤超时时间：(.+)$', content, re.MULTILINE)
             if timeout_match:
                 task_info['timeout'] = timeout_match.group(1).strip()
+            cron_match = re.search(r'- \*\*Cron Job\*\*: (.+)$', content, re.MULTILINE)
+            if cron_match:
+                task_info['cron'] = cron_match.group(1).strip()
         
-        self.write_steps_md(steps, task_info)
+        # 构建清理信息
+        cleanup_info = {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'killed_subagents': killed,
+            'cron_removed': [f'stp-heartbeat-{self.task_id}'],
+            'killed_pids': killed_pids
+        }
+        
+        self.write_steps_md(steps, task_info, cleanup_info)
         
         # 提取 subagent ID 部分用于 kill（去掉前缀）
         subagent_ids = []
@@ -474,10 +508,13 @@ class TaskOrchestrator:
                 subagent_ids.append(k)
         
         print(f"任务中断，已终止 {len(killed)} 个子代理")
+        print(f"清理信息: {cleanup_info}")
         
         return {
             "status": "ok", 
             "killed_subagents": killed,
+            "killed_pids": killed_pids,
+            "cron_removed": [f'stp-heartbeat-{self.task_id}'],
             "subagent_ids_for_kill": subagent_ids  # 可直接用于 subagents 工具
         }
 
@@ -528,6 +565,7 @@ def cmd_start(args: List[str]):
             "--every", "10m",
             "--session", "isolated",
             "--announce",
+            "--channel", "webchat",
             "--message", cron_message,
             "--description", f"STP task-{task_id} heartbeat"
         ], capture_output=True, timeout=30)
@@ -592,10 +630,15 @@ def cmd_heartbeat(args: List[str]):
         cron_name = f"stp-heartbeat-{task_id}"
         try:
             import subprocess
-            subprocess.run(["openclaw", "cron", "rm", cron_name], capture_output=True, timeout=30)
-            result["cron_removed"] = cron_name
-        except:
-            pass
+            proc = subprocess.run(["openclaw", "cron", "rm", cron_name], capture_output=True, timeout=30)
+            if proc.returncode == 0:
+                result["cron_removed"] = cron_name
+            else:
+                result["cron_error"] = f"命令返回非零: {proc.returncode}"
+                print(f"⚠️ 清理 cron 失败: {result['cron_error']}", file=sys.stderr)
+        except Exception as e:
+            result["cron_error"] = str(e)
+            print(f"❌ 清理 cron 失败: {e}", file=sys.stderr)
         result["message"] = "无活跃子代理，任务已完成"
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return result
@@ -697,13 +740,18 @@ def cmd_heartbeat(args: List[str]):
         cron_name = f"stp-heartbeat-{task_id}"
         try:
             import subprocess
-            subprocess.run([
+            proc = subprocess.run([
                 "openclaw", "cron", "rm", cron_name
             ], capture_output=True, timeout=30)
-            result["cron_removed"] = cron_name
-            result["cleanup_reason"] = "所有子代理已完成，任务结束"
+            if proc.returncode == 0:
+                result["cron_removed"] = cron_name
+                result["cleanup_reason"] = "所有子代理已完成，任务结束"
+            else:
+                result["cron_error"] = f"命令返回非零: {proc.returncode}, stderr: {proc.stderr.decode() if proc.stderr else ''}"
+                print(f"⚠️ 清理 cron 失败: {result['cron_error']}", file=sys.stderr)
         except Exception as e:
             result["cron_error"] = str(e)
+            print(f"❌ 清理 cron 失败: {e}", file=sys.stderr)
         
         # 检查是否需要删除任务目录
         try:
@@ -717,6 +765,40 @@ def cmd_heartbeat(args: List[str]):
                 result["cleanup_reason"] = "任务完成且设置删除目录"
         except Exception as e:
             result["cleanup_error"] = str(e)
+        
+        # 更新 task_steps.md 添加清理信息
+        if result.get("cron_removed"):
+            try:
+                # 读取任务信息
+                task_info = {'name': '未知', 'timeout': '无超时', 'cron': result.get("cron_removed", [])}
+                if orchestrator.steps_file.exists():
+                    content = orchestrator.steps_file.read_text(encoding='utf-8')
+                    name_match = re.search(r'- 任务名称：(.+)$', content, re.MULTILINE)
+                    if name_match:
+                        task_info['name'] = name_match.group(1).strip()
+                    timeout_match = re.search(r'- 步骤超时时间：(.+)$', content, re.MULTILINE)
+                    if timeout_match:
+                        task_info['timeout'] = timeout_match.group(1).strip()
+                
+                # 读取当前步骤
+                steps = orchestrator.read_steps_md()
+                
+                # 构建清理信息
+                cron_removed = result.get("cron_removed", "")
+                # 确保是列表
+                if isinstance(cron_removed, str):
+                    cron_removed = [cron_removed] if cron_removed else []
+                cleanup_info = {
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'killed_subagents': [],  # 自然完成时没有终止子代理
+                    'cron_removed': cron_removed,
+                    'killed_pids': []
+                }
+                
+                orchestrator.write_steps_md(steps, task_info, cleanup_info)
+                result["steps_file_updated"] = True
+            except Exception as e:
+                result["steps_update_error"] = str(e)
     
     result["need_cleanup"] = need_cleanup
     
@@ -739,10 +821,13 @@ def cmd_interrupt(args: List[str]):
     cron_name = f"stp-heartbeat-{task_id}"
     try:
         import subprocess
-        subprocess.run([
+        proc = subprocess.run([
             "openclaw", "cron", "rm", cron_name
         ], capture_output=True, timeout=30)
-        result["cron_removed"] = cron_name
+        if proc.returncode == 0:
+            result["cron_removed"] = cron_name
+        else:
+            result["cron_error"] = f"命令返回非零: {proc.returncode}"
     except Exception as e:
         result["cron_error"] = str(e)
     

@@ -418,7 +418,21 @@ python3 <STP_SCRIPTS>/stp_orchestrator.py start ~/.openclaw/workspace/tasks/task
 
 ---
 
+## 意见反馈
+
+欢迎提交 Issue 或 Pull Request！
+
+🔗 GitHub：https://github.com/scotthuang/openclawSkills/tree/main/stp
+
+---
+
 ## Changelog
+
+### 2026-03-02
+
+#### 修复
+- Cron Job 添加 `--channel webchat` 参数，避免执行时报错
+- task_step 输出清理信息：任务完成或中断时，在 `task_steps.md` 中记录清理信息（时间、终止的子代理、删除的 cron、终止的进程）
 
 ### 2026-03-01
 
